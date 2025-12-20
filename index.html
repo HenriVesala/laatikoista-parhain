@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laatikoista parhain</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="500"></canvas>
+
+        <!-- Aloitusvalikko -->
+        <div id="menu" class="overlay">
+            <h1>Laatikoista parhain</h1>
+            <p class="subtitle">Joulupöydän suurin taistelu</p>
+            <p class="instructions">Valitse laatikkosi:</p>
+            <div class="character-select">
+                <button class="char-btn" data-char="lanttu">
+                    <div class="char-preview lanttu"></div>
+                    <span>Lanttulaatikko</span>
+                    <small>Tasapainoinen</small>
+                </button>
+                <button class="char-btn" data-char="peruna">
+                    <div class="char-preview peruna"></div>
+                    <span>Perunalaatikko</span>
+                    <small>Vahva lyönti</small>
+                </button>
+                <button class="char-btn" data-char="porkkana">
+                    <div class="char-preview porkkana"></div>
+                    <span>Porkkanalaatikko</span>
+                    <small>Nopea</small>
+                </button>
+            </div>
+        </div>
+
+        <!-- Taistelun alku -ilmoitus -->
+        <div id="fight-intro" class="overlay hidden">
+            <h2 id="opponent-name">VS Perunalaatikko</h2>
+            <p id="round-text">Kierros 1/2</p>
+        </div>
+
+        <!-- Voittoruutu -->
+        <div id="victory" class="overlay hidden">
+            <h1 id="victory-title">Voitit!</h1>
+            <p id="victory-text">Olet paras laatikko!</p>
+            <button id="play-again">Pelaa uudelleen</button>
+        </div>
+
+        <!-- Häviöruutu -->
+        <div id="defeat" class="overlay hidden">
+            <h1>Hävisit!</h1>
+            <p id="defeat-text">Yritä uudelleen!</p>
+            <button id="try-again">Yritä uudelleen</button>
+        </div>
+    </div>
+
+    <div id="controls-info">
+        <p><strong>Kontrollit:</strong> ← → Liiku | ↑ Hyppää | ↓ Puolusta | Z Vasen lyönti | X Oikea lyönti</p>
+    </div>
+
+    <script src="sounds.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
