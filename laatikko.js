@@ -445,20 +445,64 @@ class Laatikko {
         const eyeY = y + 20;
         const eyeSpacing = 15;
 
-        // Silmät
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.ellipse(centerX - eyeSpacing, eyeY, 8, 10, 0, 0, Math.PI * 2);
-        ctx.ellipse(centerX + eyeSpacing, eyeY, 8, 10, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // Tarkista HP-taso ruksisilmiä ja mustelmia varten
+        const hpPercent = this.hp / this.maxHp;
+        const isDead = this.hp <= 0;
+        const isHurt = hpPercent < 0.2 && !isDead;
 
-        // Pupillit
-        ctx.fillStyle = '#333';
-        const pupilOffset = this.facing * 2;
-        ctx.beginPath();
-        ctx.arc(centerX - eyeSpacing + pupilOffset, eyeY, 4, 0, Math.PI * 2);
-        ctx.arc(centerX + eyeSpacing + pupilOffset, eyeY, 4, 0, Math.PI * 2);
-        ctx.fill();
+        // Mustelmat silmien ympärille kun HP < 50%
+        if (hpPercent < 0.5) {
+            // Mustelman tummuus kasvaa vahingon mukana (0.5 -> 0 = 0 -> 0.6 opacity)
+            const bruiseIntensity = Math.min(0.6, (0.5 - hpPercent) * 1.2);
+            ctx.fillStyle = `rgba(75, 0, 130, ${bruiseIntensity})`; // Tumma violetti/sininen
+
+            // Vasen silmän mustelma
+            ctx.beginPath();
+            ctx.ellipse(centerX - eyeSpacing, eyeY, 12, 14, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Oikea silmän mustelma (voimakkaampi kun enemmän vahinkoa)
+            if (hpPercent < 0.35) {
+                ctx.fillStyle = `rgba(75, 0, 130, ${bruiseIntensity * 0.8})`;
+                ctx.beginPath();
+                ctx.ellipse(centerX + eyeSpacing, eyeY, 12, 14, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // Vasen silmä
+        if (isDead || isHurt) {
+            // Ruksisilmä
+            this.drawXEye(centerX - eyeSpacing, eyeY);
+        } else {
+            // Normaali silmä
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.ellipse(centerX - eyeSpacing, eyeY, 8, 10, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#333';
+            const pupilOffset = this.facing * 2;
+            ctx.beginPath();
+            ctx.arc(centerX - eyeSpacing + pupilOffset, eyeY, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Oikea silmä
+        if (isDead) {
+            // Ruksisilmä (molemmat kun kuollut)
+            this.drawXEye(centerX + eyeSpacing, eyeY);
+        } else {
+            // Normaali silmä
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.ellipse(centerX + eyeSpacing, eyeY, 8, 10, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#333';
+            const pupilOffset = this.facing * 2;
+            ctx.beginPath();
+            ctx.arc(centerX + eyeSpacing + pupilOffset, eyeY, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
         // Suu
         const mouthY = y + 42;
@@ -497,5 +541,20 @@ class Laatikko {
             ctx.lineTo(centerX + eyeSpacing - 8, eyeY - 8);
             ctx.stroke();
         }
+    }
+
+    // Piirrä ruksisilmä (X)
+    drawXEye(x, y) {
+        const size = 6;
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(x - size, y - size);
+        ctx.lineTo(x + size, y + size);
+        ctx.moveTo(x + size, y - size);
+        ctx.lineTo(x - size, y + size);
+        ctx.stroke();
+        ctx.lineCap = 'butt';
     }
 }
