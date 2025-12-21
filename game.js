@@ -6,6 +6,7 @@ const ctx = canvas.getContext('2d');
 // Pelin tila
 const GameState = {
     MENU: 'menu',
+    CHAR_CONFIRM: 'char_confirm',
     FIGHT_INTRO: 'fight_intro',
     PLAYING: 'playing',
     VICTORY: 'victory',
@@ -20,18 +21,22 @@ const Characters = {
         color: '#ff9800',
         colorLight: '#ffb74d',
         colorDark: '#e65100',
-        speed: 5,
-        power: 10,
-        maxHp: 100
+        speed: 3,
+        power: 14,
+        maxHp: 100,
+        jumpHeight: 9, // Matala hyppy
+        description: 'Perinteinen joulupöydän kunkku. Lanttulaatikko iskee kovaa ja armotta - hitaudestaan huolimatta tämä oranssinen mötkö on pelätty vastustaja.'
     },
     peruna: {
         name: 'Perunalaatikko',
         color: '#a1887f',
         colorLight: '#d7ccc8',
         colorDark: '#6d4c41',
-        speed: 4,
-        power: 14,
-        maxHp: 110
+        speed: 5,
+        power: 10,
+        maxHp: 120,
+        jumpHeight: 12, // Keskitason hyppy
+        description: 'Joulupöydän sitkeä sotilas. Perunalaatikko kestää iskuja kuin mikä ja jaksaa taistella pitkään. Tasapainoinen ja luotettava valinta.'
     },
     porkkana: {
         name: 'Porkkanalaatikko',
@@ -40,7 +45,9 @@ const Characters = {
         colorDark: '#bf360c',
         speed: 7,
         power: 8,
-        maxHp: 90
+        maxHp: 90,
+        jumpHeight: 15, // Korkea hyppy
+        description: 'Salamannopea makea taistelija. Porkkanalaatikko väistelee ja iskee ennen kuin vastustaja ehtii reagoida. Nopeus on valttia!'
     }
 };
 
@@ -90,374 +97,6 @@ function drawSnowflakes() {
     });
 }
 
-// Laatikko-hahmon luokka
-class Laatikko {
-    constructor(x, charType, isPlayer = true) {
-        const char = Characters[charType];
-        this.x = x;
-        this.y = 350;
-        this.width = 80;
-        this.height = 60;
-        this.charType = charType;
-        this.char = char;
-        this.isPlayer = isPlayer;
-
-        this.vx = 0;
-        this.vy = 0;
-        this.grounded = true;
-        this.facing = isPlayer ? 1 : -1; // 1 = oikea, -1 = vasen
-
-        this.hp = char.maxHp;
-        this.maxHp = char.maxHp;
-
-        // Raajojen tila
-        this.leftArm = { angle: 0, punching: false, punchTime: 0 };
-        this.rightArm = { angle: 0, punching: false, punchTime: 0 };
-        this.blocking = false;
-
-        // Animaatiot
-        this.hitFlash = 0;
-        this.expression = 'normal'; // normal, hit, happy, angry
-        this.expressionTimer = 0;
-
-        // AI-spesifit (vain vastustajille)
-        this.aiTimer = 0;
-        this.aiAction = null;
-        this.difficulty = 1; // 1 = helppo, 2 = vaikea
-    }
-
-    update(dt, other) {
-        // Painovoima
-        if (!this.grounded) {
-            this.vy += 0.5;
-        }
-
-        // Liike
-        this.x += this.vx;
-        this.y += this.vy;
-
-        // Maahan törmäys
-        const ground = 350;
-        if (this.y >= ground) {
-            this.y = ground;
-            this.vy = 0;
-            this.grounded = true;
-        }
-
-        // Seiniin törmäys
-        if (this.x < 10) this.x = 10;
-        if (this.x > canvas.width - this.width - 10) this.x = canvas.width - this.width - 10;
-
-        // Käännytään vastustajaa kohti
-        if (other) {
-            this.facing = other.x > this.x ? 1 : -1;
-        }
-
-        // Lyöntianimaatioiden päivitys
-        this.updateArm(this.leftArm, dt);
-        this.updateArm(this.rightArm, dt);
-
-        // Osuma-efektin päivitys
-        if (this.hitFlash > 0) this.hitFlash -= dt * 5;
-
-        // Ilmeen päivitys
-        if (this.expressionTimer > 0) {
-            this.expressionTimer -= dt;
-            if (this.expressionTimer <= 0) {
-                this.expression = 'normal';
-            }
-        }
-
-        // AI-päivitys
-        if (!this.isPlayer && other) {
-            this.updateAI(dt, other);
-        }
-    }
-
-    updateArm(arm, dt) {
-        if (arm.punching) {
-            arm.punchTime += dt * 10;
-            if (arm.punchTime < 0.5) {
-                arm.angle = arm.punchTime * Math.PI * 0.8;
-            } else if (arm.punchTime < 1) {
-                arm.angle = Math.PI * 0.4 - (arm.punchTime - 0.5) * Math.PI * 0.8;
-            } else {
-                arm.punching = false;
-                arm.punchTime = 0;
-                arm.angle = 0;
-            }
-        }
-    }
-
-    punch(isLeft) {
-        const arm = isLeft ? this.leftArm : this.rightArm;
-        if (!arm.punching && !this.blocking) {
-            arm.punching = true;
-            arm.punchTime = 0;
-            SoundManager.playPunch();
-            return true;
-        }
-        return false;
-    }
-
-    checkHit(other) {
-        if (this.blocking) return false;
-
-        const checkArm = (arm, offsetX) => {
-            if (arm.punching && arm.punchTime > 0.2 && arm.punchTime < 0.6) {
-                const punchX = this.x + this.width / 2 + this.facing * (40 + Math.sin(arm.angle) * 30);
-                const punchY = this.y + 20;
-
-                // Tarkista osuuko vastustajaan
-                if (punchX > other.x && punchX < other.x + other.width &&
-                    punchY > other.y && punchY < other.y + other.height) {
-                    return true;
-                }
-            }
-            return false;
-        };
-
-        return checkArm(this.leftArm) || checkArm(this.rightArm);
-    }
-
-    takeDamage(amount) {
-        if (this.blocking) {
-            amount = Math.floor(amount * 0.2);
-            SoundManager.playBlock();
-        } else {
-            SoundManager.playHit();
-        }
-        this.hp -= amount;
-        this.hitFlash = 1;
-        this.expression = 'hit';
-        this.expressionTimer = 0.3;
-        if (this.hp < 0) this.hp = 0;
-    }
-
-    updateAI(dt, player) {
-        this.aiTimer -= dt;
-
-        if (this.aiTimer <= 0) {
-            const distance = Math.abs(this.x - player.x);
-            const reactionTime = this.difficulty === 1 ? 0.4 : 0.2;
-
-            // Päätä seuraava toiminto
-            if (distance > 150) {
-                // Lähesty pelaajaa
-                this.aiAction = 'approach';
-                this.aiTimer = reactionTime + Math.random() * 0.3;
-            } else if (distance < 80) {
-                // Lyö tai väistä
-                const rand = Math.random();
-                if (rand < (this.difficulty === 1 ? 0.4 : 0.6)) {
-                    this.aiAction = 'attack';
-                } else if (rand < 0.7) {
-                    this.aiAction = 'block';
-                } else {
-                    this.aiAction = 'retreat';
-                }
-                this.aiTimer = reactionTime + Math.random() * 0.2;
-            } else {
-                // Keskietäisyys - vaihtele
-                const rand = Math.random();
-                if (rand < 0.5) {
-                    this.aiAction = 'approach';
-                } else if (rand < 0.8) {
-                    this.aiAction = 'attack';
-                } else {
-                    this.aiAction = 'block';
-                }
-                this.aiTimer = reactionTime + Math.random() * 0.3;
-            }
-        }
-
-        // Suorita toiminto
-        this.vx = 0;
-        this.blocking = false;
-
-        switch (this.aiAction) {
-            case 'approach':
-                this.vx = this.facing * this.char.speed * 0.8;
-                break;
-            case 'retreat':
-                this.vx = -this.facing * this.char.speed * 0.6;
-                break;
-            case 'attack':
-                if (Math.random() < 0.5) {
-                    this.punch(true);
-                } else {
-                    this.punch(false);
-                }
-                break;
-            case 'block':
-                this.blocking = true;
-                break;
-        }
-
-        // Vaikeampi AI hyppää joskus
-        if (this.difficulty === 2 && Math.random() < 0.01 && this.grounded) {
-            this.vy = -12;
-            this.grounded = false;
-        }
-    }
-
-    draw() {
-        const x = this.x;
-        const y = this.y;
-
-        // Osuma-efekti
-        if (this.hitFlash > 0) {
-            ctx.fillStyle = `rgba(255, 0, 0, ${this.hitFlash * 0.3})`;
-            ctx.fillRect(x - 5, y - 5, this.width + 10, this.height + 10);
-        }
-
-        // Laatikon varjo
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-        ctx.beginPath();
-        ctx.ellipse(x + this.width / 2, 415, this.width / 2, 10, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Puolustusasento-efekti
-        if (this.blocking) {
-            ctx.strokeStyle = '#4fc3f7';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.arc(x + this.width / 2, y + this.height / 2, 50, 0, Math.PI * 2);
-            ctx.stroke();
-        }
-
-        // Laatikon runko
-        const gradient = ctx.createLinearGradient(x, y, x, y + this.height);
-        gradient.addColorStop(0, this.char.colorLight);
-        gradient.addColorStop(0.5, this.char.color);
-        gradient.addColorStop(1, this.char.colorDark);
-        ctx.fillStyle = gradient;
-
-        // Pyöristetty laatikko
-        const radius = 10;
-        ctx.beginPath();
-        ctx.moveTo(x + radius, y);
-        ctx.lineTo(x + this.width - radius, y);
-        ctx.quadraticCurveTo(x + this.width, y, x + this.width, y + radius);
-        ctx.lineTo(x + this.width, y + this.height - radius);
-        ctx.quadraticCurveTo(x + this.width, y + this.height, x + this.width - radius, y + this.height);
-        ctx.lineTo(x + radius, y + this.height);
-        ctx.quadraticCurveTo(x, y + this.height, x, y + this.height - radius);
-        ctx.lineTo(x, y + radius);
-        ctx.quadraticCurveTo(x, y, x + radius, y);
-        ctx.fill();
-
-        // Reunaviiva
-        ctx.strokeStyle = this.char.colorDark;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        // Piirrä raajat
-        this.drawArm(x, y, this.leftArm, -1);
-        this.drawArm(x, y, this.rightArm, 1);
-
-        // Kasvot
-        this.drawFace(x, y);
-    }
-
-    drawArm(x, y, arm, side) {
-        const armX = x + this.width / 2 + side * 30;
-        const armY = y + 25;
-        const armLength = 25;
-
-        // Käännä puoli hahmon suunnan mukaan
-        const actualSide = side * this.facing;
-
-        ctx.save();
-        ctx.translate(armX, armY);
-
-        // Käden kulma
-        let angle = arm.angle * actualSide;
-        if (this.blocking) {
-            angle = -Math.PI * 0.3 * side; // Kädet eteen puolustaessa
-        }
-
-        ctx.rotate(angle);
-
-        // Käsi
-        ctx.fillStyle = this.char.colorLight;
-        ctx.strokeStyle = this.char.colorDark;
-        ctx.lineWidth = 2;
-
-        ctx.beginPath();
-        ctx.ellipse(0, armLength / 2, 8, armLength / 2, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-
-        // Nyrkki
-        ctx.beginPath();
-        ctx.arc(0, armLength, 10, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.restore();
-    }
-
-    drawFace(x, y) {
-        const centerX = x + this.width / 2;
-        const eyeY = y + 20;
-        const eyeSpacing = 15;
-
-        // Silmät
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.ellipse(centerX - eyeSpacing, eyeY, 8, 10, 0, 0, Math.PI * 2);
-        ctx.ellipse(centerX + eyeSpacing, eyeY, 8, 10, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Pupillit
-        ctx.fillStyle = '#333';
-        const pupilOffset = this.facing * 2;
-        ctx.beginPath();
-        ctx.arc(centerX - eyeSpacing + pupilOffset, eyeY, 4, 0, Math.PI * 2);
-        ctx.arc(centerX + eyeSpacing + pupilOffset, eyeY, 4, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Suu
-        const mouthY = y + 42;
-        ctx.strokeStyle = '#333';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-
-        switch (this.expression) {
-            case 'hit':
-                // Surullinen/kipeä suu
-                ctx.arc(centerX, mouthY + 5, 8, Math.PI * 0.2, Math.PI * 0.8);
-                break;
-            case 'happy':
-                // Iloinen suu
-                ctx.arc(centerX, mouthY - 5, 10, 0, Math.PI);
-                break;
-            case 'angry':
-                // Vihainen suu
-                ctx.moveTo(centerX - 10, mouthY);
-                ctx.lineTo(centerX + 10, mouthY);
-                break;
-            default:
-                // Normaali pieni hymy
-                ctx.arc(centerX, mouthY - 3, 8, Math.PI * 0.1, Math.PI * 0.9);
-        }
-        ctx.stroke();
-
-        // Kulmat (vain vihaisena/osuman saaneena)
-        if (this.expression === 'hit' || this.expression === 'angry') {
-            ctx.strokeStyle = '#333';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(centerX - eyeSpacing - 8, eyeY - 12);
-            ctx.lineTo(centerX - eyeSpacing + 8, eyeY - 8);
-            ctx.moveTo(centerX + eyeSpacing + 8, eyeY - 12);
-            ctx.lineTo(centerX + eyeSpacing - 8, eyeY - 8);
-            ctx.stroke();
-        }
-    }
-}
-
 // HP-palkin piirto
 function drawHPBar(fighter, x, y, width) {
     const height = 20;
@@ -489,6 +128,39 @@ function drawHPBar(fighter, x, y, width) {
     ctx.font = 'bold 14px Arial';
     ctx.textAlign = fighter.isPlayer ? 'left' : 'right';
     ctx.fillText(fighter.char.name, fighter.isPlayer ? x : x + width, y - 5);
+}
+
+// Mehevyys-palkin piirto
+function drawStaminaBar(fighter, x, y, width) {
+    const height = 10;
+    const staminaPercent = fighter.stamina / fighter.maxStamina;
+
+    // Tausta
+    ctx.fillStyle = '#333';
+    ctx.fillRect(x, y, width, height);
+
+    // Mehevyys - keltainen/oranssi gradient
+    let staminaColor;
+    if (staminaPercent > 0.5) {
+        staminaColor = '#ffeb3b'; // Keltainen
+    } else if (staminaPercent > 0.25) {
+        staminaColor = '#ffc107'; // Oranssi-keltainen
+    } else {
+        staminaColor = '#ff5722'; // Oranssi-punainen
+    }
+    ctx.fillStyle = staminaColor;
+    ctx.fillRect(x + 1, y + 1, (width - 2) * staminaPercent, height - 2);
+
+    // Reunus
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, width, height);
+
+    // Teksti
+    ctx.fillStyle = '#fff';
+    ctx.font = '10px Arial';
+    ctx.textAlign = fighter.isPlayer ? 'left' : 'right';
+    ctx.fillText('Mehevyys', fighter.isPlayer ? x : x + width, y + height + 12);
 }
 
 // Tausta
@@ -567,12 +239,134 @@ function drawTree(x, y) {
 
 // Näppäimistön tila
 const keys = {};
+
+// Menu-navigaatio
+let selectedCharIndex = 0;
+const charTypes = ['lanttu', 'peruna', 'porkkana'];
+
+function updateMenuSelection() {
+    document.querySelectorAll('.char-btn').forEach((btn, index) => {
+        if (index === selectedCharIndex) {
+            btn.classList.add('selected');
+        } else {
+            btn.classList.remove('selected');
+        }
+    });
+}
+
+// Näytä vahvistusikkuna valitulle hahmolle
+let confirmCooldown = false;
+let confirmButtonIndex = 1; // 0 = Takaisin, 1 = Valitse
+
+function updateConfirmButtons() {
+    const backBtn = document.getElementById('confirm-back');
+    const selectBtn = document.getElementById('confirm-select');
+
+    if (confirmButtonIndex === 0) {
+        backBtn.classList.add('selected');
+        selectBtn.classList.remove('selected');
+    } else {
+        backBtn.classList.remove('selected');
+        selectBtn.classList.add('selected');
+    }
+}
+
+function showCharConfirm(charType) {
+    const char = Characters[charType];
+
+    // Piirrä preview-kuva
+    drawCharacterPreview('confirm-preview-canvas', charType, 1.5);
+
+    // Päivitä nimi ja kuvaus
+    document.getElementById('confirm-name').textContent = char.name;
+    document.getElementById('confirm-desc').textContent = char.description;
+
+    // Päivitä ominaisuuspalkit - lasketaan maksimit dynaamisesti
+    const allChars = Object.values(Characters);
+    const maxPower = Math.max(...allChars.map(c => c.power));
+    const maxSpeed = Math.max(...allChars.map(c => c.speed));
+    const maxJump = Math.max(...allChars.map(c => c.jumpHeight));
+    const maxHp = Math.max(...allChars.map(c => c.maxHp));
+
+    const powerPercent = (char.power / maxPower) * 100;
+    const speedPercent = (char.speed / maxSpeed) * 100;
+    const jumpPercent = (char.jumpHeight / maxJump) * 100;
+    const hpPercent = (char.maxHp / maxHp) * 100;
+
+    document.getElementById('stat-power').style.width = powerPercent + '%';
+    document.getElementById('stat-speed').style.width = speedPercent + '%';
+    document.getElementById('stat-jump').style.width = jumpPercent + '%';
+    document.getElementById('stat-hp').style.width = hpPercent + '%';
+
+    // Näytä vahvistusikkuna
+    document.getElementById('menu').classList.add('hidden');
+    document.getElementById('char-confirm').classList.remove('hidden');
+    gameState = GameState.CHAR_CONFIRM;
+
+    // Valitse oletuksena "Valitse"-nappi
+    confirmButtonIndex = 1;
+    updateConfirmButtons();
+
+    // Estä välitön vahvistus samalla näppäinpainalluksella
+    confirmCooldown = true;
+    setTimeout(() => { confirmCooldown = false; }, 100);
+}
+
+// Palaa takaisin hahmon valintaan
+function backToMenu() {
+    document.getElementById('char-confirm').classList.add('hidden');
+    document.getElementById('menu').classList.remove('hidden');
+    gameState = GameState.MENU;
+}
+
 document.addEventListener('keydown', (e) => {
     keys[e.code] = true;
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyZ', 'KeyX'].includes(e.code)) {
+
+    // Estä oletustoiminnot pelin näppäimille
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyZ', 'KeyX', 'Space', 'Escape'].includes(e.code)) {
         e.preventDefault();
     }
+
+    // Menu-navigaatio
+    if (gameState === GameState.MENU) {
+        if (e.code === 'ArrowLeft') {
+            selectedCharIndex = (selectedCharIndex - 1 + 3) % 3;
+            updateMenuSelection();
+        } else if (e.code === 'ArrowRight') {
+            selectedCharIndex = (selectedCharIndex + 1) % 3;
+            updateMenuSelection();
+        } else if (e.code === 'Space' || e.code === 'Enter') {
+            showCharConfirm(charTypes[selectedCharIndex]);
+        }
+    }
+
+    // Vahvistusikkunan kontrollit
+    if (gameState === GameState.CHAR_CONFIRM) {
+        if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+            confirmButtonIndex = confirmButtonIndex === 0 ? 1 : 0;
+            updateConfirmButtons();
+        } else if ((e.code === 'Space' || e.code === 'Enter') && !confirmCooldown) {
+            if (confirmButtonIndex === 1) {
+                startGame(charTypes[selectedCharIndex]);
+            } else {
+                backToMenu();
+            }
+        } else if (e.code === 'Escape' || e.code === 'Backspace') {
+            backToMenu();
+        }
+    }
+
+    // Voitto/häviö-ruudussa välilyönti palauttaa menuun
+    if ((gameState === GameState.VICTORY || gameState === GameState.DEFEAT) && e.code === 'Space') {
+        resetGame();
+    }
+
+    // Kierroksen voiton jälkeen välilyönti vie seuraavaan kierrokseen
+    if (gameState === GameState.ROUND_WIN && e.code === 'Space') {
+        startNextRound();
+    }
 });
+
 document.addEventListener('keyup', (e) => {
     keys[e.code] = false;
 });
@@ -593,13 +387,12 @@ function handlePlayerInput() {
     }
 
     // Hyppääminen
-    if (keys['ArrowUp'] && player.grounded) {
-        player.vy = -12;
-        player.grounded = false;
+    if (keys['ArrowUp']) {
+        player.jump();
     }
 
-    // Puolustus
-    if (keys['ArrowDown']) {
+    // Puolustus (vaatii staminaa)
+    if (keys['Space'] && player.stamina > 0) {
         player.blocking = true;
         player.vx = 0; // Ei voi liikkua puolustaessa
     }
@@ -624,22 +417,36 @@ function updateFight(dt) {
 
     // Tarkista osumat
     if (player.checkHit(opponent)) {
-        opponent.takeDamage(player.char.power);
+        opponent.takeDamage(player.char.power, player);
         player.leftArm.punchTime = 1; // Lopeta lyönti
         player.rightArm.punchTime = 1;
     }
     if (opponent.checkHit(player)) {
-        player.takeDamage(opponent.char.power);
+        player.takeDamage(opponent.char.power, opponent);
         opponent.leftArm.punchTime = 1;
         opponent.rightArm.punchTime = 1;
+    }
+
+    // Tarkista ilmahyökkäykset (ei voi puolustaa)
+    // checkStomp palauttaa vahingon määrän (0 = ei osumaa)
+    const playerStompDamage = player.checkStomp(opponent);
+    if (playerStompDamage > 0) {
+        opponent.takeStompDamage(playerStompDamage);
+        player.powerJump = false; // Vain yksi osuma per hyppy
+        player.vy = -6; // Pomppaa ylös osuman jälkeen
+    }
+    const opponentStompDamage = opponent.checkStomp(player);
+    if (opponentStompDamage > 0) {
+        player.takeStompDamage(opponentStompDamage);
+        opponent.powerJump = false;
+        opponent.vy = -6;
     }
 
     // Tarkista voittaja
     if (opponent.hp <= 0) {
         if (currentRound < 2) {
-            // Seuraava kierros
+            // Seuraava kierros - odota välilyöntiä
             gameState = GameState.ROUND_WIN;
-            setTimeout(() => startNextRound(), 2000);
         } else {
             // Peli voitettu!
             gameState = GameState.VICTORY;
@@ -670,6 +477,10 @@ function draw() {
         drawHPBar(player, 20, 30, 250);
         drawHPBar(opponent, canvas.width - 270, 30, 250);
 
+        // Mehevyys-palkit
+        drawStaminaBar(player, 20, 55, 250);
+        drawStaminaBar(opponent, canvas.width - 270, 55, 250);
+
         // Kierrosnumero
         ctx.fillStyle = '#fff';
         ctx.font = 'bold 20px Arial';
@@ -683,6 +494,9 @@ function draw() {
             ctx.fillStyle = '#4caf50';
             ctx.font = 'bold 48px Arial';
             ctx.fillText('Kierros voitettu!', canvas.width / 2, canvas.height / 2);
+            ctx.fillStyle = '#fff';
+            ctx.font = '20px Arial';
+            ctx.fillText('Paina VÄLILYÖNTIÄ jatkaaksesi', canvas.width / 2, canvas.height / 2 + 50);
         }
     }
 }
@@ -720,12 +534,14 @@ function startRound() {
     opponent = new Laatikko(600, opponents[currentRound - 1], false);
     opponent.difficulty = currentRound; // Toinen kierros vaikeampi
 
-    // Näytä intro
+    // Piilota kaikki muut ikkunat ja näytä intro
     document.getElementById('menu').classList.add('hidden');
+    document.getElementById('char-confirm').classList.add('hidden');
     document.getElementById('fight-intro').classList.remove('hidden');
     document.getElementById('opponent-name').textContent = `VS ${opponent.char.name}`;
     document.getElementById('round-text').textContent = `Kierros ${currentRound}/2`;
 
+    gameState = GameState.FIGHT_INTRO;
     SoundManager.playRoundStart();
 
     setTimeout(() => {
@@ -742,21 +558,141 @@ function startNextRound() {
 function resetGame() {
     document.getElementById('victory').classList.add('hidden');
     document.getElementById('defeat').classList.add('hidden');
+    document.getElementById('char-confirm').classList.add('hidden');
     document.getElementById('menu').classList.remove('hidden');
     gameState = GameState.MENU;
 }
 
 // Valikkotoiminnot
-document.querySelectorAll('.char-btn').forEach(btn => {
+document.querySelectorAll('.char-btn').forEach((btn, index) => {
     btn.addEventListener('click', () => {
-        const charType = btn.dataset.char;
-        startGame(charType);
+        selectedCharIndex = index;
+        showCharConfirm(btn.dataset.char);
     });
+
+    // Hiiren hover päivittää valinnan
+    btn.addEventListener('mouseenter', () => {
+        selectedCharIndex = index;
+        updateMenuSelection();
+    });
+});
+
+// Vahvistusikkunan napit
+document.getElementById('confirm-back').addEventListener('click', backToMenu);
+document.getElementById('confirm-select').addEventListener('click', () => {
+    startGame(charTypes[selectedCharIndex]);
 });
 
 document.getElementById('play-again').addEventListener('click', resetGame);
 document.getElementById('try-again').addEventListener('click', resetGame);
 
+// Piirrä laatikko preview-canvasiin
+function drawCharacterPreview(canvasId, charType, scale = 1) {
+    const previewCanvas = document.getElementById(canvasId);
+    const previewCtx = previewCanvas.getContext('2d');
+    const char = Characters[charType];
+
+    const width = previewCanvas.width;
+    const height = previewCanvas.height;
+
+    // Tyhjennä
+    previewCtx.clearRect(0, 0, width, height);
+
+    // Laatikon mitat (skaalattu)
+    const boxWidth = 50 * scale;
+    const boxHeight = 38 * scale;
+    const x = (width - boxWidth) / 2;
+    const y = (height - boxHeight) / 2 - 5 * scale;
+
+    // Laatikon runko
+    const gradient = previewCtx.createLinearGradient(x, y, x, y + boxHeight);
+    gradient.addColorStop(0, char.colorLight);
+    gradient.addColorStop(0.5, char.color);
+    gradient.addColorStop(1, char.colorDark);
+    previewCtx.fillStyle = gradient;
+
+    // Pyöristetty laatikko
+    const radius = 6 * scale;
+    previewCtx.beginPath();
+    previewCtx.moveTo(x + radius, y);
+    previewCtx.lineTo(x + boxWidth - radius, y);
+    previewCtx.quadraticCurveTo(x + boxWidth, y, x + boxWidth, y + radius);
+    previewCtx.lineTo(x + boxWidth, y + boxHeight - radius);
+    previewCtx.quadraticCurveTo(x + boxWidth, y + boxHeight, x + boxWidth - radius, y + boxHeight);
+    previewCtx.lineTo(x + radius, y + boxHeight);
+    previewCtx.quadraticCurveTo(x, y + boxHeight, x, y + boxHeight - radius);
+    previewCtx.lineTo(x, y + radius);
+    previewCtx.quadraticCurveTo(x, y, x + radius, y);
+    previewCtx.fill();
+
+    // Reunaviiva
+    previewCtx.strokeStyle = char.colorDark;
+    previewCtx.lineWidth = 2;
+    previewCtx.stroke();
+
+    // Kädet
+    const armLength = 16 * scale;
+    const armWidth = 5 * scale;
+    const fistRadius = 6 * scale;
+
+    [-1, 1].forEach(side => {
+        const armX = x + boxWidth / 2 + side * 20 * scale;
+        const armY = y + 16 * scale;
+
+        previewCtx.fillStyle = char.colorLight;
+        previewCtx.strokeStyle = char.colorDark;
+        previewCtx.lineWidth = 1.5;
+
+        // Käsi
+        previewCtx.beginPath();
+        previewCtx.ellipse(armX, armY + armLength / 2, armWidth, armLength / 2, 0, 0, Math.PI * 2);
+        previewCtx.fill();
+        previewCtx.stroke();
+
+        // Nyrkki
+        previewCtx.beginPath();
+        previewCtx.arc(armX, armY + armLength, fistRadius, 0, Math.PI * 2);
+        previewCtx.fill();
+        previewCtx.stroke();
+    });
+
+    // Kasvot
+    const centerX = x + boxWidth / 2;
+    const eyeY = y + 12 * scale;
+    const eyeSpacing = 10 * scale;
+
+    // Silmät
+    previewCtx.fillStyle = '#fff';
+    previewCtx.beginPath();
+    previewCtx.ellipse(centerX - eyeSpacing, eyeY, 5 * scale, 6 * scale, 0, 0, Math.PI * 2);
+    previewCtx.ellipse(centerX + eyeSpacing, eyeY, 5 * scale, 6 * scale, 0, 0, Math.PI * 2);
+    previewCtx.fill();
+
+    // Pupillit
+    previewCtx.fillStyle = '#333';
+    previewCtx.beginPath();
+    previewCtx.arc(centerX - eyeSpacing, eyeY, 2.5 * scale, 0, Math.PI * 2);
+    previewCtx.arc(centerX + eyeSpacing, eyeY, 2.5 * scale, 0, Math.PI * 2);
+    previewCtx.fill();
+
+    // Suu (hymy)
+    const mouthY = y + 26 * scale;
+    previewCtx.strokeStyle = '#333';
+    previewCtx.lineWidth = 1.5;
+    previewCtx.beginPath();
+    previewCtx.arc(centerX, mouthY - 2 * scale, 5 * scale, Math.PI * 0.1, Math.PI * 0.9);
+    previewCtx.stroke();
+}
+
+// Piirrä kaikki preview-kuvat
+function drawAllPreviews() {
+    drawCharacterPreview('preview-lanttu', 'lanttu', 1);
+    drawCharacterPreview('preview-peruna', 'peruna', 1);
+    drawCharacterPreview('preview-porkkana', 'porkkana', 1);
+}
+
 // Aloita peli
 initSnowflakes();
+updateMenuSelection(); // Valitse ensimmäinen hahmo oletuksena
+drawAllPreviews(); // Piirrä laatikko-previewit
 requestAnimationFrame(gameLoop);

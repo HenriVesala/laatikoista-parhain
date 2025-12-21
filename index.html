@@ -17,21 +17,51 @@
             <p class="instructions">Valitse laatikkosi:</p>
             <div class="character-select">
                 <button class="char-btn" data-char="lanttu">
-                    <div class="char-preview lanttu"></div>
+                    <canvas class="char-preview-canvas" id="preview-lanttu" width="80" height="70"></canvas>
                     <span>Lanttulaatikko</span>
-                    <small>Tasapainoinen</small>
+                    <small>Vahva</small>
                 </button>
                 <button class="char-btn" data-char="peruna">
-                    <div class="char-preview peruna"></div>
+                    <canvas class="char-preview-canvas" id="preview-peruna" width="80" height="70"></canvas>
                     <span>Perunalaatikko</span>
-                    <small>Vahva lyönti</small>
+                    <small>Kestävä</small>
                 </button>
                 <button class="char-btn" data-char="porkkana">
-                    <div class="char-preview porkkana"></div>
+                    <canvas class="char-preview-canvas" id="preview-porkkana" width="80" height="70"></canvas>
                     <span>Porkkanalaatikko</span>
                     <small>Nopea</small>
                 </button>
             </div>
+        </div>
+
+        <!-- Hahmon vahvistusikkuna -->
+        <div id="char-confirm" class="overlay hidden">
+            <canvas id="confirm-preview-canvas" width="120" height="100"></canvas>
+            <h2 id="confirm-name">Lanttulaatikko</h2>
+            <p id="confirm-desc" class="char-description">Kuvaus</p>
+            <div id="confirm-stats">
+                <div class="stat-row">
+                    <span class="stat-label">Voima:</span>
+                    <div class="stat-bar"><div id="stat-power" class="stat-fill power"></div></div>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Nopeus:</span>
+                    <div class="stat-bar"><div id="stat-speed" class="stat-fill speed"></div></div>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Hyppy:</span>
+                    <div class="stat-bar"><div id="stat-jump" class="stat-fill jump"></div></div>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Kestävyys:</span>
+                    <div class="stat-bar"><div id="stat-hp" class="stat-fill hp"></div></div>
+                </div>
+            </div>
+            <div class="confirm-buttons">
+                <button id="confirm-back" class="confirm-btn back">Takaisin</button>
+                <button id="confirm-select" class="confirm-btn select">Valitse</button>
+            </div>
+            <p class="confirm-hint">← → Valitse nappi | VÄLILYÖNTI = Vahvista | ESC = Takaisin</p>
         </div>
 
         <!-- Taistelun alku -ilmoitus -->
@@ -56,10 +86,11 @@
     </div>
 
     <div id="controls-info">
-        <p><strong>Kontrollit:</strong> ← → Liiku | ↑ Hyppää | ↓ Puolusta | Z Vasen lyönti | X Oikea lyönti</p>
+        <p><strong>Kontrollit:</strong> ← → Liiku | ↑ Hyppää | VÄLILYÖNTI Puolusta | Z Vasen lyönti | X Oikea lyönti</p>
     </div>
 
     <script src="sounds.js"></script>
+    <script src="laatikko.js"></script>
     <script src="game.js"></script>
 </body>
 </html>
