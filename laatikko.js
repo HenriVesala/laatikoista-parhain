@@ -72,6 +72,51 @@ class Laatikko {
         if (this.x < 10) this.x = 10;
         if (this.x > canvas.width - this.width - 10) this.x = canvas.width - this.width - 10;
 
+        // Törmäys toiseen laatikkoon - estä läpiliikkuminen ja työnnä
+        // Mutta vain jos molemmat ovat suunnilleen samalla tasolla (ei hyppää päälle)
+        if (other) {
+            const overlap = this.checkCollision(other);
+            if (overlap > 0) {
+                // Tarkista onko kyseessä päälle hyppääminen
+                // Jos toinen on selvästi ylempänä ja tulossa alas, älä työnnä sivulle
+                const myBottom = this.y + this.height;
+                const otherBottom = other.y + other.height;
+
+                // Hyppääkö joku päälle? (jalat ovat toisen pään tasolla tai ylempänä)
+                const iAmJumpingOnTop = myBottom <= other.y + 25 && this.vy > 0;
+                const otherIsJumpingOnTop = otherBottom <= this.y + 25 && other.vy > 0;
+
+                // Työnnä vain jos molemmat ovat maassa tai samalla tasolla
+                if (!iAmJumpingOnTop && !otherIsJumpingOnTop) {
+                    // Laske työntövoima voiman (power) perusteella
+                    const myPower = this.char.power;
+                    const otherPower = other.char.power;
+                    const totalPower = myPower + otherPower;
+
+                    // Vahvempi työntää enemmän (0.0 - 1.0)
+                    const myPushRatio = myPower / totalPower;
+                    const otherPushRatio = otherPower / totalPower;
+
+                    // Kumpi on vasemmalla?
+                    if (this.x < other.x) {
+                        // Minä vasemmalla, työnnän itseäni vasemmalle ja toista oikealle
+                        this.x -= overlap * otherPushRatio;
+                        other.x += overlap * myPushRatio;
+                    } else {
+                        // Minä oikealla
+                        this.x += overlap * otherPushRatio;
+                        other.x -= overlap * myPushRatio;
+                    }
+
+                    // Varmista ettei mene seinien läpi työnnön jälkeen
+                    if (this.x < 10) this.x = 10;
+                    if (this.x > canvas.width - this.width - 10) this.x = canvas.width - this.width - 10;
+                    if (other.x < 10) other.x = 10;
+                    if (other.x > canvas.width - other.width - 10) other.x = canvas.width - other.width - 10;
+                }
+            }
+        }
+
         // Käännytään vastustajaa kohti
         if (other) {
             this.facing = other.x > this.x ? 1 : -1;
@@ -337,9 +382,26 @@ class Laatikko {
                 break;
         }
 
-        // Vaikeampi AI hyppää joskus
-        if (this.difficulty === 2 && Math.random() < 0.01 && this.grounded) {
-            this.jump();
+        // Hyppyhyökkäys - suositaan jos hyvä hyppäämään mutta ei vahva
+        // Lasketaan hyppyhyökkäyksen houkuttelevuus: korkea hyppy + matala voima = hyvä
+        // jumpHeight: 9-15, power: 8-14
+        // Porkkana (jump 15, power 8) -> haluaa hyppiä
+        // Lanttu (jump 9, power 14) -> ei halua hyppiä
+        const jumpPreference = (this.char.jumpHeight / 15) * (1 - this.char.power / 20);
+        const baseJumpChance = 0.01 + jumpPreference * 0.04; // 0.01 - 0.05
+        const difficultyBonus = this.difficulty === 2 ? 0.02 : 0;
+
+        if (this.grounded && this.stamina >= this.jumpStaminaCost) {
+            const distance = Math.abs(this.x - player.x);
+            // Hyppää todennäköisemmin kun sopivalla etäisyydellä
+            const distanceBonus = (distance > 60 && distance < 150) ? 0.02 : 0;
+
+            if (Math.random() < baseJumpChance + difficultyBonus + distanceBonus) {
+                this.jump();
+                // Liiku pelaajaa kohti hypyn aikana
+                this.aiAction = 'approach';
+                this.aiTimer = 0.5;
+            }
         }
     }
 
@@ -510,25 +572,79 @@ class Laatikko {
         ctx.lineWidth = 2;
         ctx.beginPath();
 
-        switch (this.expression) {
+        // Määritä suun ilme HP:n perusteella (jos ei ole väliaikainen ilme)
+        let mouthExpression = this.expression;
+        if (this.expression === 'normal') {
+            // Vahinko prosentti (0 = ei vahinkoa, 1 = kuollut)
+            const damagePercent = 1 - hpPercent;
+            if (damagePercent >= 0.85) {
+                mouthExpression = 'pained'; // Tuskallinen irvistys
+            } else if (damagePercent >= 0.7) {
+                mouthExpression = 'sad'; // Alakuloinen
+            } else if (damagePercent >= 0.5) {
+                mouthExpression = 'serious'; // Vakava
+            }
+        }
+
+        switch (mouthExpression) {
             case 'hit':
-                // Surullinen/kipeä suu
-                ctx.arc(centerX, mouthY + 5, 8, Math.PI * 0.2, Math.PI * 0.8);
+                // Irvistys iskusta - hampaat näkyvissä
+                // Suun tausta
+                ctx.fillStyle = '#8B0000'; // Tummanpunainen suu
+                ctx.beginPath();
+                ctx.rect(centerX - 12, mouthY - 2, 24, 10);
+                ctx.fill();
+                // Hampaat (ylähammasrivi)
+                ctx.fillStyle = '#fff';
+                for (let i = 0; i < 4; i++) {
+                    ctx.fillRect(centerX - 10 + i * 6, mouthY - 2, 4, 5);
+                }
+                // Hampaat (alahammasrivi)
+                for (let i = 0; i < 4; i++) {
+                    ctx.fillRect(centerX - 10 + i * 6, mouthY + 3, 4, 4);
+                }
+                // Suun reunat
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(centerX - 12, mouthY - 2, 24, 10);
+                break;
+            case 'pained':
+                // Tuskallinen irvistys (eri kuin hit) - aaltoileva suu
+                ctx.beginPath();
+                ctx.moveTo(centerX - 10, mouthY + 2);
+                ctx.quadraticCurveTo(centerX - 5, mouthY - 3, centerX, mouthY + 2);
+                ctx.quadraticCurveTo(centerX + 5, mouthY + 7, centerX + 10, mouthY + 2);
+                ctx.stroke();
+                break;
+            case 'sad':
+                // Alakuloinen - alaspäin kaartuva suu
+                ctx.beginPath();
+                ctx.arc(centerX, mouthY + 10, 8, Math.PI * 1.2, Math.PI * 1.8);
+                ctx.stroke();
+                break;
+            case 'serious':
+                // Vakava - suora viiva
+                ctx.beginPath();
+                ctx.moveTo(centerX - 8, mouthY);
+                ctx.lineTo(centerX + 8, mouthY);
+                ctx.stroke();
                 break;
             case 'happy':
                 // Iloinen suu
                 ctx.arc(centerX, mouthY - 5, 10, 0, Math.PI);
+                ctx.stroke();
                 break;
             case 'angry':
                 // Vihainen suu
                 ctx.moveTo(centerX - 10, mouthY);
                 ctx.lineTo(centerX + 10, mouthY);
+                ctx.stroke();
                 break;
             default:
                 // Normaali pieni hymy
                 ctx.arc(centerX, mouthY - 3, 8, Math.PI * 0.1, Math.PI * 0.9);
+                ctx.stroke();
         }
-        ctx.stroke();
 
         // Kulmat (vain vihaisena/osuman saaneena)
         if (this.expression === 'hit' || this.expression === 'angry') {
@@ -556,5 +672,32 @@ class Laatikko {
         ctx.lineTo(x - size, y + size);
         ctx.stroke();
         ctx.lineCap = 'butt';
+    }
+
+    // Tarkista törmäys toiseen laatikkoon
+    // Palauttaa päällekkäisyyden määrän (0 = ei törmäystä)
+    checkCollision(other) {
+        // Tarkista onko päällekkäin horisontaalisesti
+        const myRight = this.x + this.width;
+        const otherRight = other.x + other.width;
+
+        // Tarkista myös pystysuunnassa (vain jos samalla korkeudella)
+        const myBottom = this.y + this.height;
+        const otherBottom = other.y + other.height;
+
+        const verticalOverlap = this.y < otherBottom && myBottom > other.y;
+
+        if (verticalOverlap) {
+            // Laske horisontaalinen päällekkäisyys
+            const overlapLeft = myRight - other.x;
+            const overlapRight = otherRight - this.x;
+
+            if (overlapLeft > 0 && overlapRight > 0) {
+                // Palauta pienempi päällekkäisyys (se mitä pitää korjata)
+                return Math.min(overlapLeft, overlapRight);
+            }
+        }
+
+        return 0;
     }
 }

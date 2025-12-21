@@ -2,6 +2,9 @@
 const SoundManager = {
     audioContext: null,
     initialized: false,
+    menuMusicPlaying: false,
+    menuMusicNodes: [],
+    menuMusicTimeout: null,
 
     init() {
         if (this.initialized) return;
@@ -30,30 +33,98 @@ const SoundManager = {
         oscillator.stop(ctx.currentTime + 0.1);
     },
 
-    // Osuma-ääni - "thud"
+    // Osuma-ääni - märkä "splat" (laatikkoruoka)
     playHit() {
         if (!this.initialized) this.init();
         const ctx = this.audioContext;
-        const oscillator = ctx.createOscillator();
-        const gainNode = ctx.createGain();
-        const filter = ctx.createBiquadFilter();
+        const now = ctx.currentTime;
 
-        oscillator.connect(filter);
-        filter.connect(gainNode);
-        gainNode.connect(ctx.destination);
+        // 1. Alkuräjähdys - nopea "pop"
+        const pop = ctx.createOscillator();
+        const popGain = ctx.createGain();
+        pop.connect(popGain);
+        popGain.connect(ctx.destination);
+        pop.type = 'sine';
+        pop.frequency.setValueAtTime(400, now);
+        pop.frequency.exponentialRampToValueAtTime(80, now + 0.05);
+        popGain.gain.setValueAtTime(0.5, now);
+        popGain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+        pop.start(now);
+        pop.stop(now + 0.05);
 
-        oscillator.type = 'square';
-        oscillator.frequency.setValueAtTime(100, ctx.currentTime);
-        oscillator.frequency.exponentialRampToValueAtTime(30, ctx.currentTime + 0.15);
+        // 2. Märkä kohina - "splat" tekstuuri
+        const bufferSize = ctx.sampleRate * 0.25;
+        const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const noiseData = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            // Satunnainen kohina joka vaimenee
+            const envelope = Math.exp(-i / (bufferSize * 0.15));
+            // Lisää "kuplivia" piikkejä
+            const bubbles = Math.random() < 0.1 ? Math.random() * 2 : 1;
+            noiseData[i] = (Math.random() * 2 - 1) * envelope * bubbles;
+        }
 
-        filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(500, ctx.currentTime);
+        const noise = ctx.createBufferSource();
+        const noiseGain = ctx.createGain();
+        const noiseFilter = ctx.createBiquadFilter();
+        const noiseFilter2 = ctx.createBiquadFilter();
 
-        gainNode.gain.setValueAtTime(0.4, ctx.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+        noise.buffer = noiseBuffer;
+        noise.connect(noiseFilter);
+        noiseFilter.connect(noiseFilter2);
+        noiseFilter2.connect(noiseGain);
+        noiseGain.connect(ctx.destination);
 
-        oscillator.start(ctx.currentTime);
-        oscillator.stop(ctx.currentTime + 0.15);
+        // Bandpass antaa "märän" soinnin
+        noiseFilter.type = 'bandpass';
+        noiseFilter.frequency.setValueAtTime(1200, now);
+        noiseFilter.Q.setValueAtTime(1, now);
+
+        noiseFilter2.type = 'lowpass';
+        noiseFilter2.frequency.setValueAtTime(2000, now);
+        noiseFilter2.frequency.exponentialRampToValueAtTime(400, now + 0.15);
+
+        noiseGain.gain.setValueAtTime(0.6, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+
+        noise.start(now);
+
+        // 3. Matala "thump" pohjaääni - enemmän bassoa
+        const thump = ctx.createOscillator();
+        const thumpGain = ctx.createGain();
+        const thumpFilter = ctx.createBiquadFilter();
+        thump.connect(thumpFilter);
+        thumpFilter.connect(thumpGain);
+        thumpGain.connect(ctx.destination);
+
+        thump.type = 'sine';
+        thump.frequency.setValueAtTime(80, now);
+        thump.frequency.exponentialRampToValueAtTime(25, now + 0.2);
+
+        thumpFilter.type = 'lowpass';
+        thumpFilter.frequency.setValueAtTime(120, now);
+
+        thumpGain.gain.setValueAtTime(0.6, now);
+        thumpGain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+
+        thump.start(now);
+        thump.stop(now + 0.2);
+
+        // 4. Sub-basso kerros - syvä "pomph"
+        const sub = ctx.createOscillator();
+        const subGain = ctx.createGain();
+        sub.connect(subGain);
+        subGain.connect(ctx.destination);
+
+        sub.type = 'sine';
+        sub.frequency.setValueAtTime(50, now);
+        sub.frequency.exponentialRampToValueAtTime(20, now + 0.15);
+
+        subGain.gain.setValueAtTime(0.5, now);
+        subGain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+
+        sub.start(now);
+        sub.stop(now + 0.15);
     },
 
     // Torjuttu lyönti - metallinen "clang"
@@ -151,5 +222,120 @@ const SoundManager = {
 
         oscillator.start(ctx.currentTime);
         oscillator.stop(ctx.currentTime + 0.4);
+    },
+
+    // Jouluinen taustamusiikki menulle - herkkä ja tunnelmallinen
+    startMenuMusic() {
+        if (!this.initialized) this.init();
+        if (this.menuMusicPlaying) return;
+        this.menuMusicPlaying = true;
+
+        const playMelody = () => {
+            if (!this.menuMusicPlaying) return;
+
+            const ctx = this.audioContext;
+            // Oma alkuperäinen jouluinen melodia - rauhallinen ja kaunis
+            const melody = [
+                // Ensimmäinen fraasi - nouseva, toiveikas
+                { note: 329.63, duration: 0.5 },  // E4
+                { note: 392.00, duration: 0.5 },  // G4
+                { note: 440.00, duration: 0.75 }, // A4
+                { note: 392.00, duration: 0.25 }, // G4
+                { note: 329.63, duration: 0.5 },  // E4
+                { note: 293.66, duration: 0.5 },  // D4
+                { note: 329.63, duration: 1.0 },  // E4
+                { note: 0, duration: 0.5 },       // tauko
+
+                // Toinen fraasi - laskeva, lempeä
+                { note: 440.00, duration: 0.5 },  // A4
+                { note: 392.00, duration: 0.5 },  // G4
+                { note: 329.63, duration: 0.5 },  // E4
+                { note: 293.66, duration: 0.5 },  // D4
+                { note: 261.63, duration: 0.75 }, // C4
+                { note: 293.66, duration: 0.25 }, // D4
+                { note: 329.63, duration: 1.0 },  // E4
+                { note: 0, duration: 0.5 },       // tauko
+
+                // Kolmas fraasi - nouseva huippu
+                { note: 329.63, duration: 0.5 },  // E4
+                { note: 392.00, duration: 0.5 },  // G4
+                { note: 523.25, duration: 0.75 }, // C5
+                { note: 493.88, duration: 0.25 }, // B4
+                { note: 440.00, duration: 0.5 },  // A4
+                { note: 392.00, duration: 0.5 },  // G4
+                { note: 440.00, duration: 1.0 },  // A4
+                { note: 0, duration: 0.5 },       // tauko
+
+                // Neljäs fraasi - rauhallinen lopetus
+                { note: 392.00, duration: 0.5 },  // G4
+                { note: 329.63, duration: 0.5 },  // E4
+                { note: 293.66, duration: 0.5 },  // D4
+                { note: 261.63, duration: 0.5 },  // C4
+                { note: 293.66, duration: 0.5 },  // D4
+                { note: 329.63, duration: 0.5 },  // E4
+                { note: 261.63, duration: 1.5 },  // C4 (pitkä lopetus)
+                { note: 0, duration: 1.0 },       // tauko ennen toistoa
+            ];
+
+            let time = ctx.currentTime;
+            const tempo = 0.4; // sekunti per beat
+
+            melody.forEach(({ note, duration }) => {
+                if (note > 0 && this.menuMusicPlaying) {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    const filter = ctx.createBiquadFilter();
+
+                    osc.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(ctx.destination);
+
+                    // Kellomaiset asetukset
+                    osc.type = 'triangle';
+                    filter.type = 'lowpass';
+                    filter.frequency.setValueAtTime(2000, time);
+
+                    osc.frequency.setValueAtTime(note, time);
+
+                    // Pehmeä envelope
+                    gain.gain.setValueAtTime(0, time);
+                    gain.gain.linearRampToValueAtTime(0.15, time + 0.02);
+                    gain.gain.exponentialRampToValueAtTime(0.01, time + duration * tempo - 0.02);
+
+                    osc.start(time);
+                    osc.stop(time + duration * tempo);
+
+                    this.menuMusicNodes.push(osc);
+                }
+                time += duration * tempo;
+            });
+
+            // Toista melodia uudelleen
+            const melodyDuration = melody.reduce((sum, n) => sum + n.duration, 0) * tempo;
+            this.menuMusicTimeout = setTimeout(() => {
+                if (this.menuMusicPlaying) {
+                    playMelody();
+                }
+            }, melodyDuration * 1000);
+        };
+
+        playMelody();
+    },
+
+    stopMenuMusic() {
+        this.menuMusicPlaying = false;
+        if (this.menuMusicTimeout) {
+            clearTimeout(this.menuMusicTimeout);
+            this.menuMusicTimeout = null;
+        }
+        // Pysäytä kaikki käynnissä olevat nuotit
+        this.menuMusicNodes.forEach(node => {
+            try {
+                node.stop();
+            } catch (e) {
+                // Nuotti on jo pysähtynyt
+            }
+        });
+        this.menuMusicNodes = [];
     }
 };

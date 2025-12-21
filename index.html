@@ -31,6 +31,11 @@
                     <span>Porkkanalaatikko</span>
                     <small>Nopea</small>
                 </button>
+                <button class="char-btn hidden" id="bataatti-btn" data-char="bataatti">
+                    <canvas class="char-preview-canvas" id="preview-bataatti" width="80" height="70"></canvas>
+                    <span>Bataattilaatikko</span>
+                    <small>Eksoottinen</small>
+                </button>
             </div>
         </div>
 
@@ -82,6 +87,24 @@
             <h1>Hävisit!</h1>
             <p id="defeat-text">Yritä uudelleen!</p>
             <button id="try-again">Yritä uudelleen</button>
+        </div>
+
+        <!-- Haaste-ilmoitus -->
+        <div id="challenge-intro" class="overlay hidden">
+            <h1 class="challenge-title">Laatikko haaste!</h1>
+            <canvas id="challenge-preview-canvas" width="120" height="100"></canvas>
+            <h2 id="challenger-name">Laatikko haastaja</h2>
+            <p class="challenge-text">Uusi haastaja on saapunut!</p>
+            <p class="confirm-hint">Paina VÄLILYÖNTIÄ hyväksyäksesi haaste</p>
+        </div>
+
+        <!-- Haasteen voittoruutu -->
+        <div id="challenge-victory" class="overlay hidden">
+            <h1 class="unlock-title">Uusi laatikko avattu!</h1>
+            <canvas id="unlock-preview-canvas" width="120" height="100"></canvas>
+            <h2 id="unlocked-name">Bataattilaatikko</h2>
+            <p class="unlock-text">Voit nyt valita tämän laatikon!</p>
+            <button id="challenge-continue">Jatka</button>
         </div>
     </div>
 

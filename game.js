@@ -11,16 +11,18 @@ const GameState = {
     PLAYING: 'playing',
     VICTORY: 'victory',
     DEFEAT: 'defeat',
-    ROUND_WIN: 'round_win'
+    ROUND_WIN: 'round_win',
+    CHALLENGE_INTRO: 'challenge_intro',
+    CHALLENGE_VICTORY: 'challenge_victory'
 };
 
 // Hahmojen määrittelyt
 const Characters = {
     lanttu: {
         name: 'Lanttulaatikko',
-        color: '#ff9800',
-        colorLight: '#ffb74d',
-        colorDark: '#e65100',
+        color: '#d47f00ff',
+        colorLight: '#e6a645ff',
+        colorDark: '#ab3c00ff',
         speed: 3,
         power: 14,
         maxHp: 100,
@@ -29,11 +31,11 @@ const Characters = {
     },
     peruna: {
         name: 'Perunalaatikko',
-        color: '#a1887f',
-        colorLight: '#d7ccc8',
-        colorDark: '#6d4c41',
+        color: '#ffb74d',
+        colorLight: '#f9d49eff',
+        colorDark: '#c88b2fff',
         speed: 5,
-        power: 10,
+        power: 11,
         maxHp: 120,
         jumpHeight: 12, // Keskitason hyppy
         description: 'Joulupöydän sitkeä sotilas. Perunalaatikko kestää iskuja kuin mikä ja jaksaa taistella pitkään. Tasapainoinen ja luotettava valinta.'
@@ -48,6 +50,18 @@ const Characters = {
         maxHp: 90,
         jumpHeight: 15, // Korkea hyppy
         description: 'Salamannopea makea taistelija. Porkkanalaatikko väistelee ja iskee ennen kuin vastustaja ehtii reagoida. Nopeus on valttia!'
+    },
+    bataatti: {
+        name: 'Bataattilaatikko',
+        color: '#ff8800ff',
+        colorLight: '#ffb74d',
+        colorDark: '#ce7b00ff',
+        speed: 6,
+        power: 11,
+        maxHp: 110,
+        jumpHeight: 13,
+        description: 'Eksoottinen haastaja kaukaisilta mailta. Bataattilaatikko yhdistää voiman ja nopeuden vaaralliseksi kokonaisuudeksi. Harvinainen ja arvaamaton!',
+        hidden: true // Piilotettu kunnes avataan
     }
 };
 
@@ -60,6 +74,8 @@ let playerCharType = null;
 let opponents = [];
 let snowflakes = [];
 let lastTime = 0;
+let challengeMode = false; // Onko haastetila päällä
+let bataattiUnlocked = localStorage.getItem('bataattiUnlocked') === 'true';
 
 // Lumihiutaleet taustalle
 function initSnowflakes() {
@@ -177,8 +193,11 @@ function drawBackground() {
     drawSnowflakes();
 
     // Joulukuusi taustalla
-    drawTree(650, 250);
-    drawTree(100, 280);
+    // Yksi kuusi taustalla (oikealla)
+    drawTree(700, 320);
+
+    // Lumiukko taustalla (vasemmalla)
+    drawSnowman(100, 350);
 
     // Maa
     ctx.fillStyle = '#e8f5e9';
@@ -194,47 +213,143 @@ function drawBackground() {
 }
 
 function drawTree(x, y) {
-    // Runko
+    // Runko - maahan asti
     ctx.fillStyle = '#5d4037';
-    ctx.fillRect(x - 10, y + 80, 20, 40);
+    ctx.fillRect(x - 10, y + 50, 20, 60);
 
-    // Lehvästö (kolmiot)
+    // Lehvästö (kolmiot) - piirretään alhaalta ylös, jotta ylemmät peittävät alemmat
     ctx.fillStyle = '#2e7d32';
-    for (let i = 0; i < 3; i++) {
-        ctx.beginPath();
-        ctx.moveTo(x, y - 30 + i * 40);
-        ctx.lineTo(x - 40 + i * 5, y + 30 + i * 30);
-        ctx.lineTo(x + 40 - i * 5, y + 30 + i * 30);
-        ctx.closePath();
-        ctx.fill();
-    }
+
+    // Alin kerros (isoin)
+    ctx.beginPath();
+    ctx.moveTo(x, y + 20);
+    ctx.lineTo(x - 45, y + 60);
+    ctx.lineTo(x + 45, y + 60);
+    ctx.closePath();
+    ctx.fill();
+
+    // Keskikerros
+    ctx.beginPath();
+    ctx.moveTo(x, y - 15);
+    ctx.lineTo(x - 35, y + 30);
+    ctx.lineTo(x + 35, y + 30);
+    ctx.closePath();
+    ctx.fill();
+
+    // Ylin kerros (pienin)
+    ctx.beginPath();
+    ctx.moveTo(x, y - 45);
+    ctx.lineTo(x - 25, y);
+    ctx.lineTo(x + 25, y);
+    ctx.closePath();
+    ctx.fill();
 
     // Koristeet
     ctx.fillStyle = '#f44336';
     ctx.beginPath();
-    ctx.arc(x - 15, y + 20, 5, 0, Math.PI * 2);
-    ctx.arc(x + 20, y + 50, 5, 0, Math.PI * 2);
-    ctx.arc(x - 10, y + 70, 5, 0, Math.PI * 2);
+    ctx.arc(x - 12, y + 40, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x + 15, y + 15, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x - 8, y - 5, 4, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.fillStyle = '#ffd700';
     ctx.beginPath();
-    ctx.arc(x + 10, y + 35, 5, 0, Math.PI * 2);
-    ctx.arc(x - 20, y + 55, 5, 0, Math.PI * 2);
+    ctx.arc(x + 8, y + 45, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x - 18, y + 20, 4, 0, Math.PI * 2);
     ctx.fill();
 
-    // Tähti
+    // Tähti huipulla
     ctx.fillStyle = '#ffd700';
     ctx.beginPath();
-    ctx.moveTo(x, y - 40);
+    const starY = y - 55;
+    ctx.moveTo(x, starY - 10);
     for (let i = 0; i < 5; i++) {
-        ctx.lineTo(x + Math.cos((i * 144 - 90) * Math.PI / 180) * 12,
-                   y - 40 + Math.sin((i * 144 - 90) * Math.PI / 180) * 12);
-        ctx.lineTo(x + Math.cos((i * 144 - 90 + 72) * Math.PI / 180) * 5,
-                   y - 40 + Math.sin((i * 144 - 90 + 72) * Math.PI / 180) * 5);
+        ctx.lineTo(x + Math.cos((i * 144 - 90) * Math.PI / 180) * 10,
+                   starY + Math.sin((i * 144 - 90) * Math.PI / 180) * 10);
+        ctx.lineTo(x + Math.cos((i * 144 - 90 + 72) * Math.PI / 180) * 4,
+                   starY + Math.sin((i * 144 - 90 + 72) * Math.PI / 180) * 4);
     }
     ctx.closePath();
     ctx.fill();
+}
+
+function drawSnowman(x, y) {
+    // Varjo
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    ctx.beginPath();
+    ctx.ellipse(x, y + 55, 35, 10, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Alapallo (isoin)
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#ddd';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y + 30, 30, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Keskipallo
+    ctx.beginPath();
+    ctx.arc(x, y - 10, 22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Yläpallo (pää)
+    ctx.beginPath();
+    ctx.arc(x, y - 45, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Silmät
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.arc(x - 6, y - 50, 3, 0, Math.PI * 2);
+    ctx.arc(x + 6, y - 50, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Porkkananenä
+    ctx.fillStyle = '#ff6600';
+    ctx.beginPath();
+    ctx.moveTo(x, y - 45);
+    ctx.lineTo(x + 15, y - 42);
+    ctx.lineTo(x, y - 40);
+    ctx.closePath();
+    ctx.fill();
+
+    // Suu (hiilenpalaset)
+    ctx.fillStyle = '#333';
+    for (let i = 0; i < 5; i++) {
+        const angle = (i - 2) * 0.2;
+        ctx.beginPath();
+        ctx.arc(x + Math.sin(angle) * 10, y - 35 + Math.cos(angle) * 3, 2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Napit
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.arc(x, y - 15, 3, 0, Math.PI * 2);
+    ctx.arc(x, y - 3, 3, 0, Math.PI * 2);
+    ctx.arc(x, y + 10, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Hattu
+    ctx.fillStyle = '#222';
+    ctx.fillRect(x - 15, y - 65, 30, 5); // Hatun reuna
+    ctx.fillRect(x - 10, y - 85, 20, 20); // Hatun yläosa
+
+    // Huivi
+    ctx.fillStyle = '#c41e3a';
+    ctx.fillRect(x - 12, y - 30, 24, 8);
+    // Huivin roikkuva osa
+    ctx.fillRect(x + 10, y - 30, 8, 20);
 }
 
 // Näppäimistön tila
@@ -242,10 +357,13 @@ const keys = {};
 
 // Menu-navigaatio
 let selectedCharIndex = 0;
-const charTypes = ['lanttu', 'peruna', 'porkkana'];
+// charTypes päivitetään dynaamisesti initMenu():ssa
+let charTypes = ['lanttu', 'peruna', 'porkkana'];
 
 function updateMenuSelection() {
-    document.querySelectorAll('.char-btn').forEach((btn, index) => {
+    // Valitse vain näkyvät napit
+    const visibleButtons = document.querySelectorAll('.char-btn:not(.hidden)');
+    visibleButtons.forEach((btn, index) => {
         if (index === selectedCharIndex) {
             btn.classList.add('selected');
         } else {
@@ -329,11 +447,12 @@ document.addEventListener('keydown', (e) => {
 
     // Menu-navigaatio
     if (gameState === GameState.MENU) {
+        const charCount = charTypes.length;
         if (e.code === 'ArrowLeft') {
-            selectedCharIndex = (selectedCharIndex - 1 + 3) % 3;
+            selectedCharIndex = (selectedCharIndex - 1 + charCount) % charCount;
             updateMenuSelection();
         } else if (e.code === 'ArrowRight') {
-            selectedCharIndex = (selectedCharIndex + 1) % 3;
+            selectedCharIndex = (selectedCharIndex + 1) % charCount;
             updateMenuSelection();
         } else if (e.code === 'Space' || e.code === 'Enter') {
             showCharConfirm(charTypes[selectedCharIndex]);
@@ -364,6 +483,17 @@ document.addEventListener('keydown', (e) => {
     // Kierroksen voiton jälkeen välilyönti vie seuraavaan kierrokseen
     if (gameState === GameState.ROUND_WIN && e.code === 'Space') {
         startNextRound();
+    }
+
+    // Haaste-ilmoituksessa välilyönti aloittaa haasteen
+    if (gameState === GameState.CHALLENGE_INTRO && e.code === 'Space') {
+        startChallenge();
+    }
+
+    // Haasteen voiton jälkeen välilyönti palaa menuun
+    if (gameState === GameState.CHALLENGE_VICTORY && e.code === 'Space') {
+        document.getElementById('challenge-victory').classList.add('hidden');
+        resetGame();
     }
 });
 
@@ -443,25 +573,86 @@ function updateFight(dt) {
     }
 
     // Tarkista voittaja
+    const totalRounds = opponents.length;
     if (opponent.hp <= 0) {
-        if (currentRound < 2) {
+        if (challengeMode) {
+            // Haaste voitettu - avaa bataatti!
+            gameState = GameState.CHALLENGE_VICTORY;
+            bataattiUnlocked = true;
+            localStorage.setItem('bataattiUnlocked', 'true');
+            document.getElementById('challenge-victory').classList.remove('hidden');
+            drawCharacterPreview('unlock-preview-canvas', 'bataatti', 1.5);
+            document.getElementById('unlocked-name').textContent = Characters.bataatti.name;
+            SoundManager.playVictory();
+            challengeMode = false;
+        } else if (currentRound < totalRounds) {
             // Seuraava kierros - odota välilyöntiä
             gameState = GameState.ROUND_WIN;
         } else {
             // Peli voitettu!
-            gameState = GameState.VICTORY;
-            document.getElementById('victory').classList.remove('hidden');
-            SoundManager.playVictory();
+            // Jos bataatti ei ole vielä avattu, näytä haaste
+            if (!bataattiUnlocked) {
+                showChallengeIntro();
+            } else {
+                gameState = GameState.VICTORY;
+                document.getElementById('victory').classList.remove('hidden');
+                SoundManager.playVictory();
+            }
         }
         player.expression = 'happy';
         player.expressionTimer = 5;
     } else if (player.hp <= 0) {
-        gameState = GameState.DEFEAT;
-        document.getElementById('defeat').classList.remove('hidden');
-        SoundManager.playDefeat();
+        if (challengeMode) {
+            // Haaste hävitty - palaa menuun
+            challengeMode = false;
+            gameState = GameState.DEFEAT;
+            document.getElementById('defeat').classList.remove('hidden');
+            document.getElementById('defeat-text').textContent = 'Haaste epäonnistui!';
+            SoundManager.playDefeat();
+        } else {
+            gameState = GameState.DEFEAT;
+            document.getElementById('defeat').classList.remove('hidden');
+            document.getElementById('defeat-text').textContent = 'Yritä uudelleen!';
+            SoundManager.playDefeat();
+        }
         opponent.expression = 'happy';
         opponent.expressionTimer = 5;
     }
+}
+
+// Näytä haaste-ilmoitus
+function showChallengeIntro() {
+    gameState = GameState.CHALLENGE_INTRO;
+    document.getElementById('challenge-intro').classList.remove('hidden');
+    drawCharacterPreview('challenge-preview-canvas', 'bataatti', 1.5);
+    SoundManager.playRoundStart();
+}
+
+// Aloita haastetaistelu
+function startChallenge() {
+    challengeMode = true;
+    document.getElementById('challenge-intro').classList.add('hidden');
+
+    // Luo pelaaja ja bataatti-vastustaja
+    player = new Laatikko(100, playerCharType, true);
+    player.hp = player.maxHp; // Täydet HP
+    player.stamina = player.maxStamina;
+
+    opponent = new Laatikko(600, 'bataatti', false);
+    opponent.difficulty = 2; // Vaikea AI
+
+    // Näytä fight intro
+    document.getElementById('fight-intro').classList.remove('hidden');
+    document.getElementById('opponent-name').textContent = 'VS Laatikko haastaja';
+    document.getElementById('round-text').textContent = 'HAASTE!';
+
+    gameState = GameState.FIGHT_INTRO;
+    SoundManager.playRoundStart();
+
+    setTimeout(() => {
+        document.getElementById('fight-intro').classList.add('hidden');
+        gameState = GameState.PLAYING;
+    }, 2000);
 }
 
 // Piirtofunktio
@@ -485,7 +676,7 @@ function draw() {
         ctx.fillStyle = '#fff';
         ctx.font = 'bold 20px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText(`Kierros ${currentRound}/2`, canvas.width / 2, 30);
+        ctx.fillText(`Kierros ${currentRound}/${opponents.length}`, canvas.width / 2, 30);
 
         // Voittoteksti kierroksen välissä
         if (gameState === GameState.ROUND_WIN) {
@@ -519,27 +710,34 @@ function gameLoop(timestamp) {
 // Pelin aloitus
 function startGame(charType) {
     SoundManager.init();
+    SoundManager.stopMenuMusic(); // Pysäytä taustamusiikki
     playerCharType = charType;
 
-    // Määritä vastustajat
-    const allTypes = ['lanttu', 'peruna', 'porkkana'];
-    opponents = allTypes.filter(t => t !== charType);
+    // Määritä vastustajat dynaamisesti - kaikki avatut hahmot paitsi pelaajan valitsema
+    const availableTypes = ['lanttu', 'peruna', 'porkkana'];
+    if (bataattiUnlocked) {
+        availableTypes.push('bataatti');
+    }
+    opponents = availableTypes.filter(t => t !== charType);
 
     currentRound = 1;
     startRound();
 }
 
 function startRound() {
+    const totalRounds = opponents.length;
+
     player = new Laatikko(100, playerCharType, true);
     opponent = new Laatikko(600, opponents[currentRound - 1], false);
-    opponent.difficulty = currentRound; // Toinen kierros vaikeampi
+    // Vaikeus kasvaa kierrosten edetessä (1-3)
+    opponent.difficulty = Math.min(currentRound, 3);
 
     // Piilota kaikki muut ikkunat ja näytä intro
     document.getElementById('menu').classList.add('hidden');
     document.getElementById('char-confirm').classList.add('hidden');
     document.getElementById('fight-intro').classList.remove('hidden');
     document.getElementById('opponent-name').textContent = `VS ${opponent.char.name}`;
-    document.getElementById('round-text').textContent = `Kierros ${currentRound}/2`;
+    document.getElementById('round-text').textContent = `Kierros ${currentRound}/${totalRounds}`;
 
     gameState = GameState.FIGHT_INTRO;
     SoundManager.playRoundStart();
@@ -561,19 +759,34 @@ function resetGame() {
     document.getElementById('char-confirm').classList.add('hidden');
     document.getElementById('menu').classList.remove('hidden');
     gameState = GameState.MENU;
+    // Päivitä menu (näytä bataatti jos juuri avattu)
+    initMenu();
+    drawAllPreviews();
+    selectedCharIndex = 0;
+    updateMenuSelection();
+    // Käynnistä taustamusiikki
+    SoundManager.startMenuMusic();
 }
 
 // Valikkotoiminnot
-document.querySelectorAll('.char-btn').forEach((btn, index) => {
+document.querySelectorAll('.char-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
-        selectedCharIndex = index;
-        showCharConfirm(btn.dataset.char);
+        const charType = btn.dataset.char;
+        const index = charTypes.indexOf(charType);
+        if (index !== -1) {
+            selectedCharIndex = index;
+            showCharConfirm(charType);
+        }
     });
 
     // Hiiren hover päivittää valinnan
     btn.addEventListener('mouseenter', () => {
-        selectedCharIndex = index;
-        updateMenuSelection();
+        const charType = btn.dataset.char;
+        const index = charTypes.indexOf(charType);
+        if (index !== -1) {
+            selectedCharIndex = index;
+            updateMenuSelection();
+        }
     });
 });
 
@@ -585,6 +798,10 @@ document.getElementById('confirm-select').addEventListener('click', () => {
 
 document.getElementById('play-again').addEventListener('click', resetGame);
 document.getElementById('try-again').addEventListener('click', resetGame);
+document.getElementById('challenge-continue').addEventListener('click', () => {
+    document.getElementById('challenge-victory').classList.add('hidden');
+    resetGame();
+});
 
 // Piirrä laatikko preview-canvasiin
 function drawCharacterPreview(canvasId, charType, scale = 1) {
@@ -689,10 +906,41 @@ function drawAllPreviews() {
     drawCharacterPreview('preview-lanttu', 'lanttu', 1);
     drawCharacterPreview('preview-peruna', 'peruna', 1);
     drawCharacterPreview('preview-porkkana', 'porkkana', 1);
+    if (bataattiUnlocked) {
+        drawCharacterPreview('preview-bataatti', 'bataatti', 1);
+    }
+}
+
+// Alusta menu - näytä bataatti jos avattu
+function initMenu() {
+    // Päivitä charTypes dynaamisesti
+    charTypes = ['lanttu', 'peruna', 'porkkana'];
+    if (bataattiUnlocked) {
+        charTypes.push('bataatti');
+        // Näytä bataatti-nappi
+        document.getElementById('bataatti-btn').classList.remove('hidden');
+    }
 }
 
 // Aloita peli
 initSnowflakes();
+initMenu(); // Alusta menu ja näytä bataatti jos avattu
 updateMenuSelection(); // Valitse ensimmäinen hahmo oletuksena
 drawAllPreviews(); // Piirrä laatikko-previewit
 requestAnimationFrame(gameLoop);
+
+// Käynnistä taustamusiikki kun käyttäjä klikkaa ensimmäisen kerran
+// (Web Audio API vaatii käyttäjän interaktion)
+document.addEventListener('click', function startMusicOnClick() {
+    if (gameState === GameState.MENU || gameState === GameState.CHAR_CONFIRM) {
+        SoundManager.startMenuMusic();
+    }
+    document.removeEventListener('click', startMusicOnClick);
+}, { once: true });
+
+document.addEventListener('keydown', function startMusicOnKey() {
+    if (gameState === GameState.MENU || gameState === GameState.CHAR_CONFIRM) {
+        SoundManager.startMenuMusic();
+    }
+    document.removeEventListener('keydown', startMusicOnKey);
+}, { once: true });
