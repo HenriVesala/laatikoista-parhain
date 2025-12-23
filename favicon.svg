@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Background box with gradient -->
+  <defs>
+    <linearGradient id="boxGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#e6a645"/>
+      <stop offset="50%" style="stop-color:#d47f00"/>
+      <stop offset="100%" style="stop-color:#ab3c00"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Main box body -->
+  <rect x="4" y="8" width="24" height="18" rx="3" fill="url(#boxGrad)" stroke="#ab3c00" stroke-width="1"/>
+
+  <!-- Left fist -->
+  <circle cx="2" cy="18" r="3" fill="#e6a645" stroke="#ab3c00" stroke-width="0.5"/>
+
+  <!-- Right fist -->
+  <circle cx="30" cy="18" r="3" fill="#e6a645" stroke="#ab3c00" stroke-width="0.5"/>
+
+  <!-- Left eye white -->
+  <ellipse cx="11" cy="14" rx="3" ry="3.5" fill="white"/>
+  <!-- Left pupil -->
+  <circle cx="11" cy="14" r="1.5" fill="#333"/>
+
+  <!-- Right eye white -->
+  <ellipse cx="21" cy="14" rx="3" ry="3.5" fill="white"/>
+  <!-- Right pupil -->
+  <circle cx="21" cy="14" r="1.5" fill="#333"/>
+
+  <!-- Smile -->
+  <path d="M 12 21 Q 16 24 20 21" stroke="#333" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+</svg>

@@ -224,118 +224,42 @@ const SoundManager = {
         oscillator.stop(ctx.currentTime + 0.4);
     },
 
-    // Jouluinen taustamusiikki menulle - herkkä ja tunnelmallinen
+    // Jouluinen taustamusiikki menulle - käyttää Strudel webiä
     startMenuMusic() {
-        if (!this.initialized) this.init();
         if (this.menuMusicPlaying) return;
         this.menuMusicPlaying = true;
 
-        const playMelody = () => {
-            if (!this.menuMusicPlaying) return;
-
-            const ctx = this.audioContext;
-            // Oma alkuperäinen jouluinen melodia - rauhallinen ja kaunis
-            const melody = [
-                // Ensimmäinen fraasi - nouseva, toiveikas
-                { note: 329.63, duration: 0.5 },  // E4
-                { note: 392.00, duration: 0.5 },  // G4
-                { note: 440.00, duration: 0.75 }, // A4
-                { note: 392.00, duration: 0.25 }, // G4
-                { note: 329.63, duration: 0.5 },  // E4
-                { note: 293.66, duration: 0.5 },  // D4
-                { note: 329.63, duration: 1.0 },  // E4
-                { note: 0, duration: 0.5 },       // tauko
-
-                // Toinen fraasi - laskeva, lempeä
-                { note: 440.00, duration: 0.5 },  // A4
-                { note: 392.00, duration: 0.5 },  // G4
-                { note: 329.63, duration: 0.5 },  // E4
-                { note: 293.66, duration: 0.5 },  // D4
-                { note: 261.63, duration: 0.75 }, // C4
-                { note: 293.66, duration: 0.25 }, // D4
-                { note: 329.63, duration: 1.0 },  // E4
-                { note: 0, duration: 0.5 },       // tauko
-
-                // Kolmas fraasi - nouseva huippu
-                { note: 329.63, duration: 0.5 },  // E4
-                { note: 392.00, duration: 0.5 },  // G4
-                { note: 523.25, duration: 0.75 }, // C5
-                { note: 493.88, duration: 0.25 }, // B4
-                { note: 440.00, duration: 0.5 },  // A4
-                { note: 392.00, duration: 0.5 },  // G4
-                { note: 440.00, duration: 1.0 },  // A4
-                { note: 0, duration: 0.5 },       // tauko
-
-                // Neljäs fraasi - rauhallinen lopetus
-                { note: 392.00, duration: 0.5 },  // G4
-                { note: 329.63, duration: 0.5 },  // E4
-                { note: 293.66, duration: 0.5 },  // D4
-                { note: 261.63, duration: 0.5 },  // C4
-                { note: 293.66, duration: 0.5 },  // D4
-                { note: 329.63, duration: 0.5 },  // E4
-                { note: 261.63, duration: 1.5 },  // C4 (pitkä lopetus)
-                { note: 0, duration: 1.0 },       // tauko ennen toistoa
-            ];
-
-            let time = ctx.currentTime;
-            const tempo = 0.4; // sekunti per beat
-
-            melody.forEach(({ note, duration }) => {
-                if (note > 0 && this.menuMusicPlaying) {
-                    const osc = ctx.createOscillator();
-                    const gain = ctx.createGain();
-                    const filter = ctx.createBiquadFilter();
-
-                    osc.connect(filter);
-                    filter.connect(gain);
-                    gain.connect(ctx.destination);
-
-                    // Kellomaiset asetukset
-                    osc.type = 'triangle';
-                    filter.type = 'lowpass';
-                    filter.frequency.setValueAtTime(2000, time);
-
-                    osc.frequency.setValueAtTime(note, time);
-
-                    // Pehmeä envelope
-                    gain.gain.setValueAtTime(0, time);
-                    gain.gain.linearRampToValueAtTime(0.15, time + 0.02);
-                    gain.gain.exponentialRampToValueAtTime(0.01, time + duration * tempo - 0.02);
-
-                    osc.start(time);
-                    osc.stop(time + duration * tempo);
-
-                    this.menuMusicNodes.push(osc);
-                }
-                time += duration * tempo;
-            });
-
-            // Toista melodia uudelleen
-            const melodyDuration = melody.reduce((sum, n) => sum + n.duration, 0) * tempo;
-            this.menuMusicTimeout = setTimeout(() => {
-                if (this.menuMusicPlaying) {
-                    playMelody();
-                }
-            }, melodyDuration * 1000);
-        };
-
-        playMelody();
+        // Use Strudel web if available
+        if (window.playMenuMusicStrudel) {
+            window.playMenuMusicStrudel();
+        } else {
+            console.warn('Strudel menu music not available');
+        }
     },
 
     stopMenuMusic() {
         this.menuMusicPlaying = false;
-        if (this.menuMusicTimeout) {
-            clearTimeout(this.menuMusicTimeout);
-            this.menuMusicTimeout = null;
+
+        // Stop Strudel music
+        if (window.stopMenuMusicStrudel) {
+            window.stopMenuMusicStrudel();
         }
-        // Pysäytä kaikki käynnissä olevat nuotit
-        this.menuMusicNodes.forEach(node => {
-            try {
-                node.stop();
-            } catch (e) {
-                // Nuotti on jo pysähtynyt
-            }
-        });
-        this.menuMusicNodes = [];
+    },
+
+    // Battle music
+    startBattleMusic() {
+        console.log('SoundManager.startBattleMusic called');
+        console.log('playBattleMusicStrudel exists:', !!window.playBattleMusicStrudel);
+        if (window.playBattleMusicStrudel) {
+            window.playBattleMusicStrudel();
+        } else {
+            console.warn('Strudel battle music not available');
+        }
+    },
+
+    stopBattleMusic() {
+        if (window.stopBattleMusicStrudel) {
+            window.stopBattleMusicStrudel();
+        }
     }
 };

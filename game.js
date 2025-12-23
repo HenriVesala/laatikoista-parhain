@@ -583,19 +583,23 @@ function updateFight(dt) {
             document.getElementById('challenge-victory').classList.remove('hidden');
             drawCharacterPreview('unlock-preview-canvas', 'bataatti', 1.5);
             document.getElementById('unlocked-name').textContent = Characters.bataatti.name;
+            SoundManager.stopBattleMusic();
             SoundManager.playVictory();
             challengeMode = false;
         } else if (currentRound < totalRounds) {
             // Seuraava kierros - odota välilyöntiä
             gameState = GameState.ROUND_WIN;
+            SoundManager.stopBattleMusic();
         } else {
             // Peli voitettu!
             // Jos bataatti ei ole vielä avattu, näytä haaste
             if (!bataattiUnlocked) {
+                SoundManager.stopBattleMusic();
                 showChallengeIntro();
             } else {
                 gameState = GameState.VICTORY;
                 document.getElementById('victory').classList.remove('hidden');
+                SoundManager.stopBattleMusic();
                 SoundManager.playVictory();
             }
         }
@@ -608,11 +612,13 @@ function updateFight(dt) {
             gameState = GameState.DEFEAT;
             document.getElementById('defeat').classList.remove('hidden');
             document.getElementById('defeat-text').textContent = 'Haaste epäonnistui!';
+            SoundManager.stopBattleMusic();
             SoundManager.playDefeat();
         } else {
             gameState = GameState.DEFEAT;
             document.getElementById('defeat').classList.remove('hidden');
             document.getElementById('defeat-text').textContent = 'Yritä uudelleen!';
+            SoundManager.stopBattleMusic();
             SoundManager.playDefeat();
         }
         opponent.expression = 'happy';
@@ -652,6 +658,7 @@ function startChallenge() {
     setTimeout(() => {
         document.getElementById('fight-intro').classList.add('hidden');
         gameState = GameState.PLAYING;
+        SoundManager.startBattleMusic();
     }, 2000);
 }
 
@@ -743,8 +750,11 @@ function startRound() {
     SoundManager.playRoundStart();
 
     setTimeout(() => {
+        console.log('Fight intro timeout fired, starting battle...');
         document.getElementById('fight-intro').classList.add('hidden');
         gameState = GameState.PLAYING;
+        console.log('Calling SoundManager.startBattleMusic...');
+        SoundManager.startBattleMusic();
     }, 2000);
 }
 
@@ -929,18 +939,23 @@ updateMenuSelection(); // Valitse ensimmäinen hahmo oletuksena
 drawAllPreviews(); // Piirrä laatikko-previewit
 requestAnimationFrame(gameLoop);
 
-// Käynnistä taustamusiikki kun käyttäjä klikkaa ensimmäisen kerran
-// (Web Audio API vaatii käyttäjän interaktion)
-document.addEventListener('click', function startMusicOnClick() {
-    if (gameState === GameState.MENU || gameState === GameState.CHAR_CONFIRM) {
-        SoundManager.startMenuMusic();
-    }
-    document.removeEventListener('click', startMusicOnClick);
-}, { once: true });
+// Käynnistä taustamusiikki kun käyttäjä tekee minkä tahansa interaktion
+// (Web Audio API vaatii käyttäjän interaktion ennen äänen toistoa)
+let menuMusicStarted = false;
 
-document.addEventListener('keydown', function startMusicOnKey() {
+function tryStartMenuMusic() {
+    if (menuMusicStarted) return;
     if (gameState === GameState.MENU || gameState === GameState.CHAR_CONFIRM) {
+        menuMusicStarted = true;
         SoundManager.startMenuMusic();
+        // Remove all listeners once music started
+        ['click', 'keydown', 'touchstart', 'mousedown'].forEach(event => {
+            document.removeEventListener(event, tryStartMenuMusic);
+        });
     }
-    document.removeEventListener('keydown', startMusicOnKey);
-}, { once: true });
+}
+
+// Start on any interaction
+['click', 'keydown', 'touchstart', 'mousedown'].forEach(event => {
+    document.addEventListener(event, tryStartMenuMusic);
+});
